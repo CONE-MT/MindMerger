@@ -17,12 +17,12 @@ Download the datasets and checkpoint in [here](https://drive.google.com/drive/fo
 
 
 ## Evaluation
-The checkpoint is the parameters of mapping layer for specfic LLM and multilingual model. To evaluate the performance of MergeMinds, you can run as follow:
+The checkpoint is the parameters of mapping layer for specfic LLM and multilingual model. To evaluate the performance of MindMerger, you can run as follow:
 ```angular2html
 python run_evaluation.py \
     --llm_path meta-math/MetaMath-7B-V1.0 \
     --mt_path --mt_path \
-    --init_checkpoint outputs/MergeMinds/pytorch_model.bin \
+    --init_checkpoint outputs/MindMerger/pytorch_model.bin \
     --augmentation True
 ```
 
