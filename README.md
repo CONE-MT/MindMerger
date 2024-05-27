@@ -1,7 +1,7 @@
-# MergeMinds
+# MindMerger
 
 
-MergeMinds is a new method for multilingual reasoning, which merges LLMs with the external language understanding capabilities from multilingual models to boost the multilingual reasoning performance. 
+MindMerger is a new method for multilingual reasoning, which merges LLMs with the external language understanding capabilities from multilingual models to boost the multilingual reasoning performance. 
 A two-step training scheme is introduced to first train to embeded the external capabilities into LLMs and then train the collaborative utilization of the external capabilities and the built-in capabilities in LLMs.
 
 
@@ -33,7 +33,7 @@ We use a two-stage scheme to train MergeMinds.
 ```angular2html
 deepspeed run_training.py --deepspeed \
     --llm_path meta-math/MetaMath-7B-V1.0 \
-    --mt_path --mt_path \
+    --mt_path google/mt5-xl \
     --stage_name mapping --train_num 100000 \
     --train_batch_size 128 \
     --train_micro_batch_size_per_gpu 8 \
@@ -45,7 +45,7 @@ deepspeed run_training.py --deepspeed \
 ```angular2html
 deepspeed run_training.py --deepspeed \
     --llm_path meta-math/MetaMath-7B-V1.0 \
-    --mt_path --mt_path \
+    --mt_path google/mt5-xl \
     --stage_name augmentation --train_num 30000 \
     --train_batch_size 128 \
     --train_micro_batch_size_per_gpu 2 \
