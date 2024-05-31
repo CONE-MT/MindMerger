@@ -1,8 +1,8 @@
 import torch.fx
 from transformers import AutoTokenizer
 import torch
-from utils import save_model, set_seed, extract_last_num
-from read_datasets import *
+from utils.utils import save_model, set_seed, extract_last_num
+from utils.read_datasets import *
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler

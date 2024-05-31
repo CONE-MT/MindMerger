@@ -3,18 +3,18 @@ import torch.fx
 from tqdm import tqdm
 from transformers import AutoTokenizer
 import torch
-from utils import save_model, set_seed
-from read_datasets import *
+from utils.utils import save_model, set_seed
+from utils.read_datasets import *
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 import json
 import deepspeed
-from input_features import *
+from utils.input_features import *
 from modeling_mindmerger import MindMerger
 import os
-from deepspeed_config import get_train_ds_config
+from utils.deepspeed_config import get_train_ds_config
 from evaluation import evaluate_ppl
 
 def main(args):

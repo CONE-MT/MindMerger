@@ -1,7 +1,7 @@
 
-from input_features import *
+from utils.input_features import *
 from tqdm import tqdm
-from utils import extract_last_num
+from utils.utils import extract_last_num
 import math
 import torch
 def evaluate_math(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len,
