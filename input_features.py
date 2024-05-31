@@ -34,15 +34,15 @@ def bert_t5_input_features(input_texts_m2m, tokenizer_m2m, max_seq_len):
     attention_mask_m2m = encoding_m2m.attention_mask.cuda()
     return input_ids_m2m, attention_mask_m2m
 
-def llama_input_features(input_texts_llama, tokenizer_llama,
+def llm_input_features(input_texts_llm, tokenizer_llm,
                          max_seq_len, add_bos_token, add_eos_token):
-    tokenizer_llama.add_bos_token = add_bos_token
-    tokenizer_llama.add_eos_token = add_eos_token
-    encoding_llama = tokenizer_llama(input_texts_llama,
+    tokenizer_llm.add_bos_token = add_bos_token
+    tokenizer_llm.add_eos_token = add_eos_token
+    encoding_llm = tokenizer_llm(input_texts_llm,
                          padding='longest',
                          max_length=max_seq_len,
                          truncation=True,
                          return_tensors="pt")
-    input_ids_llama = encoding_llama.input_ids.cuda()
-    attention_mask_llama = encoding_llama.attention_mask.cuda()
-    return input_ids_llama, attention_mask_llama
+    input_ids_llm = encoding_llm.input_ids.cuda()
+    attention_mask_llm = encoding_llm.attention_mask.cuda()
+    return input_ids_llm, attention_mask_llm

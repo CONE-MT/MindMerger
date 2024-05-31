@@ -3,7 +3,7 @@ from input_features import *
 from tqdm import tqdm
 from utils import extract_last_num
 import math
-
+import torch
 def evaluate_math(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len,
                   max_gen_len, use_prompt, langs_map):
     model.eval()
@@ -22,7 +22,7 @@ def evaluate_math(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len,
         if use_prompt:
             add_bos_token = False
             add_eos_token = False
-            input_ids_prompt, mask_prompt = llama_input_features(prompts, tokenizer_llm, max_gen_len, add_bos_token,
+            input_ids_prompt, mask_prompt = llm_input_features(prompts, tokenizer_llm, max_gen_len, add_bos_token,
                                                            add_eos_token)
         generate_ids = model(input_ids_m2m, attention_mask_m2m,
                              input_ids_prompt=input_ids_prompt,
@@ -31,8 +31,6 @@ def evaluate_math(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len,
         results = tokenizer_llm.batch_decode(generate_ids,
                                                skip_special_tokens=True,
                                                clean_up_tokenization_spaces=False)
-
-        print(results)
 
         preds += results
         golds += targets
@@ -71,14 +69,14 @@ def evaluate_ppl(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len, max_
                                                               max_seq_len, source_languages, langs_map)
         add_bos_token = False
         add_eos_token = True
-        labels, mask_label = llama_input_features(targets, tokenizer_llm,
+        labels, mask_label = llm_input_features(targets, tokenizer_llm,
                                                   max_gen_len, add_bos_token, add_eos_token)
 
         input_ids_prompt, mask_prompt = None, None
         if use_prompt:
             add_bos_token = False
             add_eos_token = False
-            input_ids_prompt, mask_prompt = llama_input_features(prompts, tokenizer_llm,
+            input_ids_prompt, mask_prompt = llm_input_features(prompts, tokenizer_llm,
                                                                  max_gen_len, add_bos_token,
                                                                  add_eos_token)
         loss = model(input_ids_m2m, attention_mask_m2m,
@@ -90,6 +88,6 @@ def evaluate_ppl(model, test_set, tokenizer_llm, tokenizer_mt, max_seq_len, max_
 
     loss = loss_all / step_i
     perplexity = math.exp(loss)
+    model.train()
+    torch.cuda.empty_cache()
     return perplexity
-
-

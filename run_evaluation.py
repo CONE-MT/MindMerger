@@ -1,5 +1,4 @@
 import torch.fx
-from tqdm import tqdm
 from transformers import AutoTokenizer
 import torch
 from utils import save_model, set_seed, extract_last_num
@@ -7,14 +6,11 @@ from read_datasets import *
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
-from torch.utils.data.distributed import DistributedSampler
 import json
-import deepspeed
-from input_features import *
-from modeling_mergeminds import MergeMinds
+from modeling_mindmerger import MindMerger
 import os
-from deepspeed_config import get_train_ds_config
 from evaluation import *
+
 
 def main(args):
     llm_path = args.llm_path
@@ -44,21 +40,21 @@ def main(args):
         'save_name': save_name,
         'result_path_base': result_path_base
     }, indent=2))
-    model = MergeMinds(mt_path, llm_path, max_gen_len,
+    model = MindMerger(mt_path, llm_path, max_gen_len,
                        tokenizer_llm.bos_token_id,
                        tokenizer_llm.pad_token_id)
-
     if args.init_checkpoint is not None:
         init_checkpoint = args.init_checkpoint
         checkpoint = torch.load(init_checkpoint, map_location='cpu')
         model_dict = checkpoint['model_state_dict']
-        model.adapter.load_state_dict(model_dict, True)
+        model.mapping.load_state_dict(model_dict, True)
         print('mapping init from:', init_checkpoint)
     model = model.cuda()
     scores_map = {}
     avg = 0
     url_acc, hrl_acc = 0, 0
     for test_lang in test_sets:
+
         test_set = test_sets[test_lang]
         test_sampler = SequentialSampler(test_set)
         test_set = MathDataset(test_set, 'math')
@@ -69,7 +65,6 @@ def main(args):
             shuffle=False,
             num_workers=1,
             drop_last=False)
-
         acc, results_list = evaluate_math(model, test_set, tokenizer_llm, tokenizer_m2m,
                                                  max_seq_len, max_gen_len, augmentation, langs_map)
         print('test_lang:', test_lang, 'acc:', acc)
@@ -108,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_name",
         type=str,
-        default='MergeMinds',
+        default='MindMerger',
     )
     parser.add_argument(
         "--eval_batch_size",

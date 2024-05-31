@@ -13,7 +13,7 @@ pip install -r requirements.txt
 ```
 
 ## Data Preparation
-Download the datasets and checkpoint in [here](https://drive.google.com/drive/folders/1HsdE63WObbMDm_3IKL6LRyGuBGdmn19c?usp=sharing) and put them under current folder.
+Download the datasets and checkpoint in [here](https://drive.google.com/drive/folders/1DzlAZfvJAHBUyKWi4Uwi0ayZDdnfZw6O?usp=sharing) and put them under current folder.
 
 
 ## Evaluation
@@ -21,7 +21,7 @@ The checkpoint is the parameters of mapping layer for specfic LLM and multilingu
 ```angular2html
 python run_evaluation.py \
     --llm_path meta-math/MetaMath-7B-V1.0 \
-    --mt_path --mt_path \
+    --mt_path google/mt5-xl \
     --init_checkpoint outputs/MindMerger/pytorch_model.bin \
     --augmentation True
 ```
@@ -70,7 +70,3 @@ Please cite this paper in your publications if it helps your research:
   url={https://api.semanticscholar.org/CorpusID:270063337}
 }
 ```
-
-
-
-

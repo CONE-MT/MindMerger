@@ -3,7 +3,7 @@ import torch.fx
 from tqdm import tqdm
 from transformers import AutoTokenizer
 import torch
-from utils import save_model, set_seed, extract_last_num
+from utils import save_model, set_seed
 from read_datasets import *
 import argparse
 import ast
@@ -12,14 +12,13 @@ from torch.utils.data.distributed import DistributedSampler
 import json
 import deepspeed
 from input_features import *
-from modeling_mergeminds import MergeMinds
+from modeling_mindmerger import MindMerger
 import os
 from deepspeed_config import get_train_ds_config
 from evaluation import evaluate_ppl
 
-
 def main(args):
-    llama_path = args.llama_path
+    llm_path = args.llm_path
     mt_path = args.mt_path
     train_num = args.train_num
     stage_name = args.stage_name
@@ -29,8 +28,10 @@ def main(args):
     else:
         train_set = read_math_train(train_num)
         task = 'math'
-    dev_set = train_set[:1000]
-    train_set = train_set[1000:]
+
+    dev_set = train_set[:args.dev_size]
+    train_set = train_set[args.dev_size:]
+
     train_set = MathDataset(train_set, task)
     dev_set = MathDataset(dev_set, task)
     lr = args.lr
@@ -52,13 +53,13 @@ def main(args):
     os.makedirs(output_model_path_base, exist_ok=True)
     os.makedirs(result_path_base, exist_ok=True)
     tokenizer_m2m = AutoTokenizer.from_pretrained(mt_path)
-    tokenizer_llama = AutoTokenizer.from_pretrained(llama_path, use_fast=True)
-    tokenizer_llama.pad_token = tokenizer_llama.eos_token
-    tokenizer_llama.padding_side = "left"
-    # tokenizer_llama.pad_token = "[PAD]"
+    tokenizer_llm = AutoTokenizer.from_pretrained(llm_path, use_fast=True)
+    tokenizer_llm.pad_token = tokenizer_llm.eos_token
+    tokenizer_llm.padding_side = "left"
+    # tokenizer_llm.pad_token = "[PAD]"
 
     print(json.dumps({
-        'llama_path': llama_path,
+        'llm_path': llm_path,
         'mt_path': mt_path,
         'lr': lr,
         'epoch_num': epoch_num,
@@ -68,22 +69,21 @@ def main(args):
         'max_seq_len': max_seq_len,
         'max_gen_len': max_gen_len,
         'train_batch_size': train_batch_size,
-        'save_name': save_name,
-        'result_path_base': result_path_base,
+        'result_path': result_path_base,
         'output_model_path': output_model_path_base,
     }, indent=2))
 
     if stage_name != 'mapping' and args.init_checkpoint is None:
         args.init_checkpoint = f'./outputs/{save_name}/mapping/pytorch_model.bin'
-    model = MergeMinds(mt_path, llama_path, max_gen_len,
-                       tokenizer_llama.bos_token_id,
-                       tokenizer_llama.pad_token_id)
+    model = MindMerger(mt_path, llm_path, max_gen_len,
+                       tokenizer_llm.bos_token_id,
+                       tokenizer_llm.pad_token_id)
     if args.init_checkpoint is not None:
         init_checkpoint = args.init_checkpoint
         checkpoint = torch.load(init_checkpoint, map_location='cpu')
         model_dict = checkpoint['model_state_dict']
-        model.adapter.load_state_dict(model_dict, False)
-        print('mapping init from:', init_checkpoint)
+        model.mapping.load_state_dict(model_dict, False)
+        print('mapping layer init from:', init_checkpoint)
 
     parameters = filter(lambda p: p.requires_grad, model.parameters())
     model, optimizer, _, __ = deepspeed.initialize(
@@ -109,7 +109,10 @@ def main(args):
         drop_last=False)
 
     global_rank = torch.distributed.get_rank()
-    best_perplexity = 1000000000
+    # best_perplexity = 1000000000
+    best_perplexity = evaluate_ppl(model, dev_set, tokenizer_llm, tokenizer_m2m,
+                                   max_seq_len, max_gen_len, langs_map, augmentation)
+    eval_step = 2000
     for epoch in range(epoch_num):
         model.train()
         tr_loss, nb_tr_steps = 0, 0
@@ -126,14 +129,14 @@ def main(args):
                                                                   langs_map)
             add_bos_token = False
             add_eos_token = True
-            labels, mask_label = llama_input_features(targets, tokenizer_llama,
+            labels, mask_label = llm_input_features(targets, tokenizer_llm,
                                                       max_gen_len, add_bos_token, add_eos_token)
 
             input_ids_prompt, mask_prompt = None, None
             if augmentation:
                 add_bos_token = False
                 add_eos_token = False
-                input_ids_prompt, mask_prompt = llama_input_features(prompts, tokenizer_llama,
+                input_ids_prompt, mask_prompt = llm_input_features(prompts, tokenizer_llm,
                                                                      max_gen_len, add_bos_token,
                                                                      add_eos_token)
 
@@ -145,22 +148,35 @@ def main(args):
             nb_tr_steps += 1
             model.backward(loss)
             model.step()
-            step_count += 1
+
             loss_show = ' Epoch:' + str(epoch) + " loss:" + str(round(tr_loss / nb_tr_steps, 4)) #+ f" lr:{'%.2E' % scheduler.get_last_lr()[0]}"
             step_trange.set_postfix_str(loss_show)
 
-        perplexity = evaluate_ppl(model, dev_set, tokenizer_llama, tokenizer_m2m,
+            if step_count % eval_step == 0 and step_count > 0:
+                perplexity = evaluate_ppl(model, dev_set, tokenizer_llm, tokenizer_m2m,
+                                          max_seq_len, max_gen_len, langs_map, augmentation)
+                print('ppl:', perplexity)
+                if global_rank == 0 and perplexity < best_perplexity:
+                    best_perplexity = perplexity
+                    save_model(output_model_path_base, model.mapping)
+                    print('save new best')
+            step_count += 1
+
+
+
+        perplexity = evaluate_ppl(model, dev_set, tokenizer_llm, tokenizer_m2m,
                              max_seq_len, max_gen_len, langs_map, augmentation)
+        print('ppl:', perplexity)
         if global_rank == 0 and perplexity < best_perplexity:
             best_perplexity = perplexity
-            save_model(output_model_path_base, model.adapter)
+            save_model(output_model_path_base, model.mapping)
             print('save new best')
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--llama_path",
+        "--llm_path",
         type=str,
         default='../LLMs/Llama-2-7b-hf/'
     )
@@ -172,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_name",
         type=str,
-        default='MergeMinds'
+        default='MindMerger'
     )
     parser.add_argument(
         "--stage_name",
@@ -207,7 +223,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval_batch_size",
         type=int,
-        default=8
+        default=2
     )
     parser.add_argument(
         "--gradient_accumulation",
@@ -224,7 +240,11 @@ if __name__ == "__main__":
         type=int,
         default=512
     )
-
+    parser.add_argument(
+        "--dev_size",
+        type=int,
+        default=3000
+    )
     parser.add_argument(
         "--init_checkpoint",
         type=str,
