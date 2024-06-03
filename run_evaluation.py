@@ -1,8 +1,8 @@
 import torch.fx
 from transformers import AutoTokenizer
 import torch
-from utils.utils import save_model, set_seed, extract_last_num
-from utils.read_datasets import *
+from tools.read_datasets import *
+from tools.utils import save_model, set_seed, extract_last_num
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
@@ -10,7 +10,6 @@ import json
 from modeling_mindmerger import MindMerger
 import os
 from evaluation import *
-
 
 def main(args):
     llm_path = args.llm_path
