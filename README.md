@@ -19,12 +19,18 @@ Download the datasets and checkpoint in [here](https://drive.google.com/drive/fo
 ## Evaluation
 The checkpoint is the parameters of mapping layer for specfic LLM and multilingual model. To evaluate the performance of MindMerger, you can run as follow:
 ```angular2html
-python run_evaluation.py \
+deepspeed run_evaluation.py --deepspeed \
     --llm_path meta-math/MetaMath-7B-V1.0 \
     --mt_path google/mt5-xl \
     --init_checkpoint outputs/MindMerger/pytorch_model.bin \
     --augmentation True
 ```
+
+Evaluation results on MGSM dataset:
+
+| MGSM             | Bn | Th | Sw | Ja | Zh | De | Fr | Ru | Es | En | Lrl. |Hrl. |Avg.| 
+|------------------|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| MindMerger (mT5) |46.8|50.0|58.4|52.8|57.6|60.8|61.2|58.8|58.8|67.2|51.7|59.9|57.4|
 
 ## Training
 We use a two-stage scheme to train MergeMinds.
