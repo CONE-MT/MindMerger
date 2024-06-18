@@ -10,6 +10,8 @@ import json
 from modeling_mindmerger import MindMerger
 import os
 from evaluation import *
+import deepspeed
+from tools.deepspeed_config import get_train_ds_config
 
 def main(args):
     llm_path = args.llm_path
@@ -39,16 +41,28 @@ def main(args):
         'save_name': save_name,
         'result_path_base': result_path_base
     }, indent=2))
+
+    ds_config = get_train_ds_config()
+
+
     model = MindMerger(mt_path, llm_path, max_gen_len,
                        tokenizer_llm.bos_token_id,
                        tokenizer_llm.pad_token_id)
+
+
     if args.init_checkpoint is not None:
         init_checkpoint = args.init_checkpoint
         checkpoint = torch.load(init_checkpoint, map_location='cpu')
         model_dict = checkpoint['model_state_dict']
         model.mapping.load_state_dict(model_dict, True)
         print('mapping init from:', init_checkpoint)
-    model = model.cuda()
+    # model = model.cuda()
+    parameters = filter(lambda p: p.requires_grad, model.parameters())
+    model, optimizer, _, __ = deepspeed.initialize(
+        config=ds_config,
+        model=model,
+        model_parameters=parameters,
+        training_data=None)
     scores_map = {}
     avg = 0
     url_acc, hrl_acc = 0, 0
@@ -110,6 +124,11 @@ if __name__ == "__main__":
         default=8
     )
     parser.add_argument(
+        "--local_rank",
+        type=int,
+        default=0
+    )
+    parser.add_argument(
         "--max_seq_len",
         type=int,
         default=512
@@ -129,6 +148,7 @@ if __name__ == "__main__":
         type=ast.literal_eval,
         default=True
     )
+    parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
