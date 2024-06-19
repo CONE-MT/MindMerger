@@ -42,7 +42,14 @@ def main(args):
         'result_path_base': result_path_base
     }, indent=2))
 
-    ds_config = get_train_ds_config()
+    train_micro_batch_size_per_gpu = args.train_micro_batch_size_per_gpu
+    gradient_accumulation_steps = args.gradient_accumulation_steps
+
+    gpu_num = torch.cuda.device_count()
+    train_batch_size = gpu_num * train_micro_batch_size_per_gpu * gradient_accumulation_steps
+    ds_config = get_train_ds_config(train_batch_size=train_batch_size,
+                                    gradient_accumulation_steps=gradient_accumulation_steps,
+                                    )
 
 
     model = MindMerger(mt_path, llm_path, max_gen_len,
@@ -147,6 +154,16 @@ if __name__ == "__main__":
         "--augmentation",
         type=ast.literal_eval,
         default=True
+    )
+    parser.add_argument(
+        "--train_micro_batch_size_per_gpu",
+        type=int,
+        default=1
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=1
     )
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
