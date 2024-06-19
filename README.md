@@ -22,7 +22,7 @@ The checkpoint is the parameters of mapping layer for specfic LLM and multilingu
 deepspeed run_evaluation.py --deepspeed \
     --llm_path meta-math/MetaMath-7B-V1.0 \
     --mt_path google/mt5-xl \
-    --init_checkpoint outputs/MindMerger/pytorch_model.bin \
+    --init_checkpoint outputs/MergeMinds/augmentation/pytorch_model.bin \
     --augmentation True
 ```
 
