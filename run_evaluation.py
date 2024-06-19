@@ -48,6 +48,7 @@ def main(args):
     gpu_num = torch.cuda.device_count()
     train_batch_size = gpu_num * train_micro_batch_size_per_gpu * gradient_accumulation_steps
     ds_config = get_train_ds_config(train_batch_size=train_batch_size,
+                                    train_micro_batch_size_per_gpu=train_micro_batch_size_per_gpu,
                                     gradient_accumulation_steps=gradient_accumulation_steps,
                                     )
 
