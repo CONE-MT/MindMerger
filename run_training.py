@@ -3,31 +3,56 @@ import torch.fx
 from tqdm import tqdm
 from transformers import AutoTokenizer
 import torch
-from tools.utils import save_model, set_seed
-from tools.read_datasets import *
+from mindmerger_tools.utils import save_model, set_seed
+from mindmerger_tools.read_datasets import *
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 import json
 import deepspeed
-from tools.input_features import *
+from mindmerger_tools.input_features import *
 from modeling_mindmerger import MindMerger
 import os
-from tools.deepspeed_config import get_train_ds_config
+from mindmerger_tools.deepspeed_config import get_train_ds_config
 from evaluation import evaluate_ppl
+
 
 def main(args):
     llm_path = args.llm_path
     mt_path = args.mt_path
+
     train_num = args.train_num
     stage_name = args.stage_name
+    task = args.task
+    augmentation = args.augmentation
+    save_name = args.save_name
+    result_path_base = f'./results/{save_name}/{task}/{stage_name}/'
+    output_model_path_base = f'./outputs/{save_name}/{task}/{stage_name}/'
+
     if stage_name == 'mapping':
-        train_set = read_lego(train_num)
+        if 'math' in task:
+            languages = ['Bengali', 'Thai', 'Swahili', 'Japanese', 'Chinese', 'German', 'French', 'Russian',
+                         'Spanish']
+            train_set = read_lego(train_num, languages)
+
+        elif 'csqa' in task:
+            languages = ['Urdu', 'Hindi', 'Swahili', 'Japanese', 'Vietnamese', 'Polish', 'Chinese',
+                         'Flemish', 'Russian', 'Italian', 'German', 'Portuguese', 'French', 'Spanish', 'Arabic']
+            train_set = read_lego(train_num, languages)
+
+        else:
+            languages = ['Swahili', 'Urdu', 'Hindi', 'Thai', 'Arabic', 'Turkish', 'Greek',
+                          'Vietnamese', 'Chinese', 'Russian', 'Bulgarian', 'German', 'French', 'Spanish']
+            train_set = read_lego(train_num, languages)
         task = 'translation'
     else:
-        train_set = read_math_train(train_num)
-        task = 'math'
+        if 'math' in task:
+            train_set = read_math_train(train_num)
+        elif 'csqa' in task:
+            train_set = read_x_csqa_train()
+        else:
+            train_set = read_xnli_train()
 
     dev_set = train_set[:args.dev_size]
     train_set = train_set[args.dev_size:]
@@ -36,19 +61,17 @@ def main(args):
     dev_set = MathDataset(dev_set, task)
     lr = args.lr
     epoch_num = args.epoch_num
-    gradient_accumulation = args.gradient_accumulation
+
     max_seq_len = args.max_seq_len
     max_gen_len = args.max_gen_len
 
     train_batch_size = args.train_batch_size
     eval_batch_size = args.eval_batch_size
     train_micro_batch_size_per_gpu = args.train_micro_batch_size_per_gpu
+    gpu_num = torch.cuda.device_count()
+    gradient_accumulation = train_batch_size // (train_micro_batch_size_per_gpu * gpu_num)
+    assert train_micro_batch_size_per_gpu * gpu_num * gradient_accumulation == train_batch_size
     ds_config = get_train_ds_config(train_batch_size, train_micro_batch_size_per_gpu, lr, gradient_accumulation)
-
-    augmentation = args.augmentation
-    save_name = args.save_name
-    result_path_base = f'./results/{save_name}/{stage_name}/'
-    output_model_path_base = f'./outputs/{save_name}/{stage_name}/'
 
     os.makedirs(output_model_path_base, exist_ok=True)
     os.makedirs(result_path_base, exist_ok=True)
@@ -74,7 +97,7 @@ def main(args):
     }, indent=2))
 
     if stage_name != 'mapping' and args.init_checkpoint is None:
-        args.init_checkpoint = f'./outputs/{save_name}/mapping/pytorch_model.bin'
+        args.init_checkpoint = f'./outputs/{save_name}/{task}/mapping/pytorch_model.bin'
     model = MindMerger(mt_path, llm_path, max_gen_len,
                        tokenizer_llm.bos_token_id,
                        tokenizer_llm.pad_token_id)
@@ -130,15 +153,15 @@ def main(args):
             add_bos_token = False
             add_eos_token = True
             labels, mask_label = llm_input_features(targets, tokenizer_llm,
-                                                      max_gen_len, add_bos_token, add_eos_token)
+                                                    max_gen_len, add_bos_token, add_eos_token)
 
             input_ids_prompt, mask_prompt = None, None
             if augmentation:
                 add_bos_token = False
                 add_eos_token = False
                 input_ids_prompt, mask_prompt = llm_input_features(prompts, tokenizer_llm,
-                                                                     max_gen_len, add_bos_token,
-                                                                     add_eos_token)
+                                                                   max_gen_len, add_bos_token,
+                                                                   add_eos_token)
 
             loss = model(input_ids_m2m, attention_mask_m2m,
                          input_ids_prompt=input_ids_prompt, mask_prompt=mask_prompt,
@@ -165,7 +188,7 @@ def main(args):
 
 
         perplexity = evaluate_ppl(model, dev_set, tokenizer_llm, tokenizer_m2m,
-                             max_seq_len, max_gen_len, langs_map, augmentation)
+                                  max_seq_len, max_gen_len, langs_map, augmentation)
         print('ppl:', perplexity)
         if global_rank == 0 and perplexity < best_perplexity:
             best_perplexity = perplexity
@@ -189,6 +212,11 @@ if __name__ == "__main__":
         "--save_name",
         type=str,
         default='MindMerger'
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default='translation'
     )
     parser.add_argument(
         "--stage_name",
@@ -224,11 +252,6 @@ if __name__ == "__main__":
         "--eval_batch_size",
         type=int,
         default=2
-    )
-    parser.add_argument(
-        "--gradient_accumulation",
-        type=int,
-        default=24
     )
     parser.add_argument(
         "--max_seq_len",
@@ -275,13 +298,15 @@ if __name__ == "__main__":
     langs = ['Thai', 'Swahili', 'Bengali', 'Chinese', 'German', 'Spanish', 'French', 'Japanese', 'Russian', 'English']
     langs_map_flores = {'Swahili': 'swh', 'Benli': 'ben', 'English': 'eng', 'Thai': 'tha', 'Chinese': 'zho_simpl',
                         'German': 'deu', 'Spanish': 'spa', 'French': 'fra', 'Japanese': 'jpn', 'Russian': 'rus', }
+
     langs_map_m2m = {'English': 'en', 'Swahili': 'sw', 'Chinese': 'zh', 'Bengali': 'bn',
      'German': 'de', 'Spanish': 'es', 'French': 'fr', 'Japanese': 'ja',
-     'Russian': 'ru', 'Thai': 'th',
+     'Russian': 'ru', 'Thai': 'th', 'Greek': 'el', 'Telugu': 'te',
      'Arabic': 'ar', 'Bulgarian': 'bg', 'Croatian': 'hr', 'Hungarian': 'hu',
      'Italian': 'it', 'Lithuanian': 'lt', 'Macedonian': 'mk', 'Polish': 'pl',
      'Portuguese': 'pt', 'Albanian': 'sq', 'Serbian': 'sr', 'Turkish': 'tr',
      'Vietnamese': 'vi', 'Hindi': 'hi', 'Flemish': 'nl', 'Urdu': 'ur'}
+
     langs_map_nllb = {
         'English': 'eng_Latn', 'Swahili': 'swh_Latn', 'Chinese': 'zho_Hans', 'Bengali': 'ben_Beng',
         'German': 'deu_Latn', 'Spanish': 'spa_Latn', 'French': 'fra_Latn', 'Japanese': 'jpn_Jpan',

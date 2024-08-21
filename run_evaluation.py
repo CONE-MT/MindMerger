@@ -1,8 +1,8 @@
 import torch.fx
 from transformers import AutoTokenizer
 import torch
-from tools.read_datasets import *
-from tools.utils import save_model, set_seed, extract_last_num
+from mindmerger_tools.read_datasets import *
+from mindmerger_tools.utils import save_model, set_seed, extract_last_num
 import argparse
 import ast
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
@@ -11,7 +11,7 @@ from modeling_mindmerger import MindMerger
 import os
 from evaluation import *
 import deepspeed
-from tools.deepspeed_config import get_train_ds_config
+from mindmerger_tools.deepspeed_config import get_train_ds_config
 
 def main(args):
     llm_path = args.llm_path
@@ -24,9 +24,21 @@ def main(args):
 
     augmentation = args.augmentation
     save_name = args.save_name
+    task = args.task
 
-    result_path_base = f'./results/{save_name}/'
-    test_sets = read_mgsms()
+    result_path_base = f'./results/{save_name}/{task}/'
+
+    if 'mgsm' in task:
+        test_sets = read_mgsms()
+        task = 'math'
+    elif 'msvamp' in task:
+        test_sets = read_msvamp()
+        task = 'math'
+    elif 'csqa' in task:
+        test_sets = read_x_csqa()
+    else:
+        test_sets = read_xnli()
+
     os.makedirs(result_path_base, exist_ok=True)
     tokenizer_m2m = AutoTokenizer.from_pretrained(mt_path)
     tokenizer_llm = AutoTokenizer.from_pretrained(llm_path, use_fast=True)
@@ -43,13 +55,13 @@ def main(args):
     }, indent=2))
 
     train_micro_batch_size_per_gpu = args.train_micro_batch_size_per_gpu
-    gradient_accumulation_steps = args.gradient_accumulation_steps
-
+    train_batch_size = args.train_batch_size
     gpu_num = torch.cuda.device_count()
-    train_batch_size = gpu_num * train_micro_batch_size_per_gpu * gradient_accumulation_steps
+    gradient_accumulation = train_batch_size // (train_micro_batch_size_per_gpu * gpu_num)
+    assert train_micro_batch_size_per_gpu * gpu_num * gradient_accumulation == train_batch_size
     ds_config = get_train_ds_config(train_batch_size=train_batch_size,
                                     train_micro_batch_size_per_gpu=train_micro_batch_size_per_gpu,
-                                    gradient_accumulation_steps=gradient_accumulation_steps,
+                                    gradient_accumulation_steps=gradient_accumulation,
                                     )
 
 
@@ -73,12 +85,10 @@ def main(args):
         training_data=None)
     scores_map = {}
     avg = 0
-    url_acc, hrl_acc = 0, 0
     for test_lang in test_sets:
-
         test_set = test_sets[test_lang]
         test_sampler = SequentialSampler(test_set)
-        test_set = MathDataset(test_set, 'math')
+        test_set = MathDataset(test_set, task)
         test_set = torch.utils.data.DataLoader(
             dataset=test_set,
             batch_size=eval_batch_size,
@@ -86,23 +96,27 @@ def main(args):
             shuffle=False,
             num_workers=1,
             drop_last=False)
-        acc, results_list = evaluate_math(model, test_set, tokenizer_llm, tokenizer_m2m,
-                                                 max_seq_len, max_gen_len, augmentation, langs_map)
+        if 'math' in task:
+            acc, results_list = evaluate_math(model, test_set, tokenizer_llm, tokenizer_m2m,
+                                                     max_seq_len, max_gen_len, augmentation, langs_map)
+        else:
+            acc, results_list = evaluate_classification(model, test_set, tokenizer_llm, tokenizer_m2m,
+                                              max_seq_len, max_gen_len, augmentation, langs_map)
         print('test_lang:', test_lang, 'acc:', acc)
         scores_map[test_lang] = acc
         result_path = f'{result_path_base}/{test_lang}.json'
         with open(result_path, 'w', encoding='utf-8') as f:
             json.dump(results_list, f, ensure_ascii=False, indent=2)
         avg += acc
-
-        if test_lang in ['Thai', 'Swahili', 'Bengali']:
-            url_acc += acc
-        else:
-            hrl_acc += acc
     print(scores_map)
-    print('Average accuracy :', round(avg / len(test_sets), 1),
-          'Low-resource accuracy:', round(url_acc / 3, 1),
-          'High-resource accuracy:', round(hrl_acc / 7, 1))
+    print('Average accuracy :', round(avg / len(test_sets), 1))
+    score_path = f'{result_path_base}/scores.tsv'
+    with open(score_path, 'w', encoding='utf-8') as f:
+        for lang in scores_map:
+            score = scores_map[lang]
+            f.write(f'{lang}\t{score}\n')
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -125,6 +139,11 @@ if __name__ == "__main__":
         "--save_name",
         type=str,
         default='MindMerger',
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default='math',
     )
     parser.add_argument(
         "--eval_batch_size",
@@ -157,12 +176,12 @@ if __name__ == "__main__":
         default=True
     )
     parser.add_argument(
-        "--train_micro_batch_size_per_gpu",
+        "--train_batch_size",
         type=int,
-        default=1
+        default=128
     )
     parser.add_argument(
-        "--gradient_accumulation_steps",
+        "--train_micro_batch_size_per_gpu",
         type=int,
         default=1
     )
@@ -178,7 +197,7 @@ if __name__ == "__main__":
                         'German': 'deu', 'Spanish': 'spa', 'French': 'fra', 'Japanese': 'jpn', 'Russian': 'rus', }
     langs_map_m2m = {'English': 'en', 'Swahili': 'sw', 'Chinese': 'zh', 'Bengali': 'bn',
                      'German': 'de', 'Spanish': 'es', 'French': 'fr', 'Japanese': 'ja',
-                     'Russian': 'ru', 'Thai': 'th',
+                     'Russian': 'ru', 'Thai': 'th', 'Greek': 'el', 'Telugu': 'te',
                      'Arabic': 'ar', 'Bulgarian': 'bg', 'Croatian': 'hr', 'Hungarian': 'hu',
                      'Italian': 'it', 'Lithuanian': 'lt', 'Macedonian': 'mk', 'Polish': 'pl',
                      'Portuguese': 'pt', 'Albanian': 'sq', 'Serbian': 'sr', 'Turkish': 'tr',
