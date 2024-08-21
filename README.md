@@ -15,7 +15,7 @@ pip install -r requirements.txt
 Download the datasets and checkpoint in [here](https://drive.google.com/drive/folders/1Rm5ppr1fCd4KbiDR2LSFKNChq_uSfiSE?usp=drive_link) and put them under current folder.
 
 In the folder, we provide two stage training data and evaluation data for math, x-csqa, and xnli tasks.
-We provide the checkpoint of MindMerger for math based on [MetaMath-Llama-7B](https://huggingface.co/meta-math/MetaMath-7B-V1.0), for x-csqa based on [LLaMAX-7B-X-CSQA](https://huggingface.co/LLaMAX/LLaMAX2-7B-X-CSQA), and for xnli based on [LLaMAX-7B-X-XNLI](https://huggingface.co/LLaMAX/LLaMAX2-7B-XNLI). mT5-xl is used as multilingual model.
+We provide the checkpoint of MindMerger for math based on [MetaMath-Llama-7B](https://huggingface.co/meta-math/MetaMath-7B-V1.0), for x-csqa based on [LLaMAX-7B-X-CSQA](https://huggingface.co/LLaMAX/LLaMAX2-7B-X-CSQA), and for xnli based on [LLaMAX-7B-X-XNLI](https://huggingface.co/LLaMAX/LLaMAX2-7B-XNLI). mT5-xl is used as multilingual encoder.
 
 ## Evaluation
 The checkpoint is the parameters of mapping layer for specfic LLM and multilingual model. To evaluate the performance of MindMerger, you can run as follows:
