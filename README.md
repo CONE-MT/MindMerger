@@ -1,5 +1,5 @@
 # MindMerger
-Code for [MindMerger: Efficient Boosting LLM Reasoning in non-English Languages](https://arxiv.org/pdf/2405.17386)
+Code for [MindMerger: Efficient Boosting LLM Reasoning in non-English Languages](https://arxiv.org/pdf/2405.17386) (NeurIPS 2024)
 
 MindMerger is a new method for multilingual reasoning, which merges LLMs with the external language understanding capabilities from multilingual models to boost the multilingual reasoning performance. 
 A two-step training scheme is introduced to first train to embeded the external capabilities into LLMs and then train the collaborative utilization of the external capabilities and the built-in capabilities in LLMs.
