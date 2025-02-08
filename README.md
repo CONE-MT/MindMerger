@@ -96,10 +96,24 @@ bash scripts/training_math.sh
 Please cite this paper in your publications if it helps your research:
 
 ```
-@inproceedings{Huang2024MindMergerEB,
-  title={MindMerger: Efficient Boosting LLM Reasoning in non-English Languages},
-  author={Zixian Huang and Wenhao Zhu and Gong Cheng and Lei Li and Fei Yuan},
-  year={2024},
-  url={https://api.semanticscholar.org/CorpusID:270063337}
+@inproceedings{DBLP:conf/nips/HuangZ0LY24,
+  author       = {Zixian Huang and
+                  Wenhao Zhu and
+                  Gong Cheng and
+                  Lei Li and
+                  Fei Yuan},
+  editor       = {Amir Globersons and
+                  Lester Mackey and
+                  Danielle Belgrave and
+                  Angela Fan and
+                  Ulrich Paquet and
+                  Jakub M. Tomczak and
+                  Cheng Zhang},
+  title        = {MindMerger: Efficiently Boosting {LLM} Reasoning in non-English Languages},
+  booktitle    = {Advances in Neural Information Processing Systems 38: Annual Conference
+                  on Neural Information Processing Systems 2024, NeurIPS 2024, Vancouver,
+                  BC, Canada, December 10 - 15, 2024},
+  year         = {2024},
+  url          = {http://papers.nips.cc/paper\_files/paper/2024/hash/3bf80b34f731313b8292f4578e820c90-Abstract-Conference.html}
 }
 ```
